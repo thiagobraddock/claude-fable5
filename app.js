@@ -5,8 +5,8 @@ const PT_NAMES = {
   "F#": "Fá#", G: "Sol", "G#": "Sol#", A: "Lá", "A#": "Lá#", B: "Si",
 };
 
-// Teclado virtual de Sol3 a Dó6 (cobre todas as melodias incluídas)
-const FIRST_NOTE = { name: "G", octave: 3 };
+// Teclado virtual de Dó3 a Dó6 — espaço para mão esquerda (graves) e direita
+const FIRST_NOTE = { name: "C", octave: 3 };
 const LAST_NOTE = { name: "C", octave: 6 };
 
 // Mapeamento do teclado do computador (duas oitavas principais)
@@ -192,15 +192,16 @@ function getSong(key) {
 }
 
 // ---------- Importação de melodias ----------
-const CLAUDE_PROMPT = `Converta a melodia que vou te passar (foto de partitura, PDF ou apenas o nome da música) para o formato JSON do app Piano Tutor:
+const CLAUDE_PROMPT = `Converta a música que vou te passar (foto de partitura, PDF ou apenas o nome da música) para o formato JSON do app Piano Tutor:
 
-{"title":"Nome da Música","bpm":100,"notes":[{"n":"G4","d":0.75},{"n":"G4","d":0.25},{"n":"A4","d":1},{"n":"G4","d":1}]}
+{"title":"Nome da Música","bpm":100,"notes":[{"n":"G4","d":0.75},{"n":"G4","d":0.25},{"n":["C3","E3","A4"],"d":1},{"n":"G4","d":1}]}
 
 Regras:
-- "n" é a nota em notação científica americana (C, C#, D, D#, E, F, F#, G, G#, A, A#, B + número da oitava). O Dó central é C4.
+- "n" pode ser UMA nota ("C4") ou um ACORDE: lista de notas tocadas ao mesmo tempo (["C3","E3","G3"]). Use acordes para juntar mão esquerda (graves) e mão direita (melodia) que soam no mesmo tempo.
+- Notas em notação científica americana (C, C#, D, D#, E, F, F#, G, G#, A, A#, B + número da oitava). O Dó central é C4. Mão esquerda costuma ficar na oitava 3, melodia nas oitavas 4 e 5.
 - "d" é a duração em tempos: 1 = semínima, 0.5 = colcheia, 2 = mínima, 4 = semibreve.
-- Use apenas a melodia principal, uma nota por vez (sem acordes).
-- Todas as notas devem ficar entre G3 e C6; transponha a música se for preciso.
+- Para iniciantes, prefira a melodia simples; se eu pedir "com as duas mãos", adicione baixo/acordes simples (no máximo 3 notas juntas).
+- Todas as notas devem ficar entre C3 e C6; transponha a música se for preciso.
 - "bpm" é o andamento em batidas por minuto.
 - Responda SOMENTE com o JSON, sem nenhum texto antes ou depois.`;
 
@@ -229,8 +230,13 @@ function parseCompact(text) {
     if (bpm) { song.bpm = +bpm[1]; return; }
     l.split(/[\s,;]+/).forEach((tok) => {
       if (!tok) return;
-      const [n, d] = tok.split(":");
-      song.notes.push({ n, d: d ? parseFloat(d.replace(",", ".")) : 1 });
+      const [names, d] = tok.split(":");
+      // "Dó3+Mi3+Sol3" = acorde (notas simultâneas)
+      const parts = names.split("+");
+      song.notes.push({
+        n: parts.length > 1 ? parts : parts[0],
+        d: d ? parseFloat(d.replace(",", ".")) : 1,
+      });
     });
   });
   return song;
@@ -259,27 +265,39 @@ function parseImport(text) {
   }
 
   const notes = song.notes.map((nt, i) => {
-    const rawName = typeof nt === "string" ? nt : nt && nt.n;
-    const id = normalizeNoteName(rawName);
-    if (!id) throw new Error(`Nota nº ${i + 1} inválida: "${rawName}". Use o formato C4, G#4, Dó4…`);
-    const d = Number(typeof nt === "string" ? 1 : nt.d) || 1;
-    return { n: id, d: Math.min(8, Math.max(0.125, d)) };
+    const raw = typeof nt === "string" ? { n: nt, d: 1 } : nt || {};
+    const names = Array.isArray(raw.n) ? raw.n : [raw.n];
+    if (!names.length) throw new Error(`A nota nº ${i + 1} está vazia.`);
+    if (names.length > 6) throw new Error(`O acorde nº ${i + 1} tem notas demais (máximo 6).`);
+    const ids = [...new Set(names.map((name) => {
+      const id = normalizeNoteName(name);
+      if (!id) throw new Error(`Nota nº ${i + 1} inválida: "${name}". Use o formato C4, G#4, Dó4…`);
+      return id;
+    }))];
+    const d = Number(raw.d) || 1;
+    return { n: ids.length === 1 ? ids[0] : ids, d: Math.min(8, Math.max(0.125, d)) };
   });
 
-  // encaixa no alcance do teclado (G3–C6), transpondo oitavas inteiras se necessário
-  const lo = noteToMidi("G3");
+  // encaixa no alcance do teclado (C3–C6), transpondo oitavas inteiras se necessário
+  const lo = noteToMidi("C3");
   const hi = noteToMidi("C6");
-  const midis = notes.map((nt) => noteToMidi(nt.n));
-  const min = Math.min(...midis);
-  const max = Math.max(...midis);
+  const allMidis = notes.flatMap((nt) => (Array.isArray(nt.n) ? nt.n : [nt.n]).map(noteToMidi));
+  const min = Math.min(...allMidis);
+  const max = Math.max(...allMidis);
   let shift = null;
   for (const s of [0, 12, -12, 24, -24]) {
     if (min + s >= lo && max + s <= hi) { shift = s; break; }
   }
   if (shift === null) {
-    throw new Error("A melodia usa notas além do alcance do teclado (Sol3 a Dó6), mesmo transpondo. Peça ao Claude uma versão simplificada em uma região média.");
+    throw new Error("A música usa notas além do alcance do teclado (Dó3 a Dó6), mesmo transpondo. Peça ao Claude uma versão simplificada em uma região média.");
   }
-  if (shift !== 0) notes.forEach((nt, i) => { nt.n = midiToNote(midis[i] + shift); });
+  if (shift !== 0) {
+    notes.forEach((nt) => {
+      nt.n = Array.isArray(nt.n)
+        ? nt.n.map((n) => midiToNote(noteToMidi(n) + shift))
+        : midiToNote(noteToMidi(nt.n) + shift);
+    });
+  }
 
   return {
     title: String(song.title || "Minha melodia").slice(0, 60),
@@ -294,11 +312,17 @@ const state = {
   mode: "free",
   song: null,
   index: 0,
+  remaining: new Set(), // notas do passo atual que faltam tocar (acorde = várias)
   hits: 0,
   errors: 0,
   active: false,      // sessão de prática em andamento
   demoPlaying: false,
 };
+
+// Um passo da música pode ser uma nota ("C4") ou um acorde (["C3","E3","G3"])
+function chordOf(step) {
+  return Array.isArray(step.n) ? step.n : [step.n];
+}
 
 const els = {
   modeSelect: document.getElementById("mode-select"),
@@ -380,6 +404,7 @@ function startPractice() {
   state.song = currentSong();
   if (!state.song) return;
   state.index = 0;
+  state.remaining = new Set(state.song.notes.length ? chordOf(state.song.notes[0]) : []);
   state.hits = 0;
   state.errors = 0;
   state.active = true;
@@ -393,11 +418,11 @@ function buildNoteStrip() {
   els.noteStrip.innerHTML = "";
   const style = document.getElementById("note-names").value;
   const nameStyle = style === "off" ? "pt" : style;
-  state.song.notes.forEach((note, i) => {
+  state.song.notes.forEach((step, i) => {
     const chip = document.createElement("span");
     chip.className = "note-chip";
     chip.dataset.index = i;
-    chip.textContent = noteDisplayName(note.n, nameStyle);
+    chip.textContent = chordOf(step).map((n) => noteDisplayName(n, nameStyle)).join("+");
     els.noteStrip.appendChild(chip);
   });
   updateStrip();
@@ -418,8 +443,7 @@ function clearTarget() {
 function highlightTarget() {
   clearTarget();
   if (!state.active || state.index >= state.song.notes.length) return;
-  const target = state.song.notes[state.index].n;
-  keyEls[target]?.classList.add("target");
+  state.remaining.forEach((n) => keyEls[n]?.classList.add("target"));
 }
 
 function updateStats() {
@@ -460,16 +484,25 @@ function handleInput(noteId) {
 
   if (state.mode !== "learn" || !state.active || state.demoPlaying) return;
 
-  const expected = state.song.notes[state.index].n;
-  if (noteId === expected) {
+  if (state.remaining.has(noteId)) {
     state.hits++;
-    state.index++;
+    state.remaining.delete(noteId);
     flashKey(noteId, "flash-ok");
+    keyEls[noteId]?.classList.remove("target");
     hideFeedback();
-    updateStats();
-    updateStrip();
-    if (state.index >= state.song.notes.length) finishPractice();
-    else highlightTarget();
+    if (state.remaining.size === 0) {
+      state.index++;
+      updateStats();
+      updateStrip();
+      if (state.index >= state.song.notes.length) {
+        finishPractice();
+      } else {
+        state.remaining = new Set(chordOf(state.song.notes[state.index]));
+        highlightTarget();
+      }
+    } else {
+      updateStats();
+    }
   } else {
     state.errors++;
     flashKey(noteId, "flash-err");
@@ -477,8 +510,10 @@ function handleInput(noteId) {
     if (chip) chip.classList.add("wrong-once");
     const style = document.getElementById("note-names").value;
     const nameStyle = style === "off" ? "pt" : style;
+    const expected = [...state.remaining].map((n) => noteDisplayName(n, nameStyle)).join(" + ");
+    const plural = state.remaining.size > 1 ? "as notas certas são" : "a nota certa é";
     showFeedback(
-      `✗ Você tocou ${noteDisplayName(noteId, nameStyle)}, mas a nota certa é ${noteDisplayName(expected, nameStyle)}. Tente outra vez!`,
+      `✗ Você tocou ${noteDisplayName(noteId, nameStyle)}, mas ${plural} ${expected}. Tente outra vez!`,
       "err"
     );
     updateStats();
@@ -527,12 +562,13 @@ function playDemo() {
 
   const beat = 60 / song.bpm;
   let when = 0.2;
-  song.notes.forEach((note) => {
-    const dur = note.d * beat;
-    demo.handles.push(playNote(note.n, Math.max(dur * 1.1, 0.45), when));
+  song.notes.forEach((step) => {
+    const dur = step.d * beat;
+    const chord = chordOf(step);
+    chord.forEach((n) => demo.handles.push(playNote(n, Math.max(dur * 1.1, 0.45), when)));
     const delay = when * 1000;
     demo.timeouts.push(setTimeout(() => {
-      flashKey(note.n, "pressed", dur * 900);
+      chord.forEach((n) => flashKey(n, "pressed", dur * 900));
     }, delay));
     when += dur;
   });
@@ -608,7 +644,7 @@ document.getElementById("note-names").addEventListener("change", () => {
 // ---------- Inicialização ----------
 document.getElementById("prompt-text").textContent =
   CLAUDE_PROMPT +
-  "\n\n— Formato simples também aceito (digitado à mão):\ntitulo: Minha Música\nbpm: 100\nC4 D4:0.5 Mi4 Fá4:2\n(nota:duração — sem duração vale 1 tempo)";
+  "\n\n— Formato simples também aceito (digitado à mão):\ntitulo: Minha Música\nbpm: 100\nC4 D4:0.5 Mi4 Fá4:2 Dó3+Mi3+Sol3:2\n(nota:duração — sem duração vale 1 tempo; '+' junta notas num acorde)";
 buildKeyboard();
 populateSongs();
 setMode("free");

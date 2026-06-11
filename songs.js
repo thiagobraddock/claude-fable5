@@ -12,6 +12,18 @@ const SONGS = {
     ],
   },
 
+  parabensDuasMaos: {
+    title: "Parabéns pra Você (duas mãos)",
+    bpm: 110,
+    // melodia na mão direita + baixo na esquerda (notas entre colchetes soam juntas)
+    notes: [
+      { n: "G4", d: 0.75 }, { n: "G4", d: 0.25 }, { n: ["C3", "A4"], d: 1 }, { n: "G4", d: 1 }, { n: "C5", d: 1 }, { n: ["G3", "B4"], d: 2 },
+      { n: "G4", d: 0.75 }, { n: "G4", d: 0.25 }, { n: ["G3", "A4"], d: 1 }, { n: "G4", d: 1 }, { n: "D5", d: 1 }, { n: ["C3", "C5"], d: 2 },
+      { n: "G4", d: 0.75 }, { n: "G4", d: 0.25 }, { n: ["C3", "G5"], d: 1 }, { n: "E5", d: 1 }, { n: "C5", d: 1 }, { n: ["F3", "B4"], d: 1 }, { n: "A4", d: 2 },
+      { n: "F5", d: 0.75 }, { n: "F5", d: 0.25 }, { n: ["C3", "E5"], d: 1 }, { n: "C5", d: 1 }, { n: ["G3", "D5"], d: 1 }, { n: ["C3", "C5"], d: 2 },
+    ],
+  },
+
   odeAlegria: {
     title: "Ode à Alegria (9ª Sinfonia de Beethoven)",
     bpm: 120,

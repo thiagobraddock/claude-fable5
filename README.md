@@ -19,7 +19,7 @@ python3 -m http.server 8000
 
 ## Funcionalidades
 
-- **Teclado virtual** de Sol3 a Dó6, tocável com o mouse/toque ou com o teclado
+- **Teclado virtual** de Dó3 a Dó6, tocável com o mouse/toque ou com o teclado
   do computador (`Z X C V B N M` para a oitava grave, `Q W E R T Y U I` para a
   aguda; teclas pretas em `S D G H J` e `2 3 5 6 7`).
 - **Som sintetizado** das notas via Web Audio API (sem arquivos de áudio).
@@ -55,17 +55,21 @@ para quem não programa:
 O importador aceita:
 
 ```json
-{"title":"Minha Música","bpm":100,"notes":[{"n":"C4","d":1},{"n":"D4","d":0.5}]}
+{"title":"Minha Música","bpm":100,"notes":[{"n":"C4","d":1},{"n":["C3","E3","G4"],"d":0.5}]}
 ```
 
-ou um formato simples digitado à mão (nomes em português valem!):
+Quando `n` é uma lista, as notas formam um **acorde** (soam juntas — útil para
+músicas com as duas mãos: baixo na esquerda + melodia na direita). No modo de
+prática, o passo só avança quando todas as notas do acorde forem tocadas.
+
+Também é aceito um formato simples digitado à mão (nomes em português valem!):
 
 ```
 titulo: Minha Música
 bpm: 100
-Dó4 Ré4:0.5 Mi4 Fá4:2
+Dó4 Ré4:0.5 Mi4 Fá4:2 Dó3+Mi3+Sol3:2
 ```
 
-Se a melodia não couber no teclado (G3 a C6), o importador tenta transpor por
+Se a melodia não couber no teclado (C3 a C6), o importador tenta transpor por
 oitavas automaticamente. Melodias fixas do app continuam em `songs.js`, no
 mesmo formato.
