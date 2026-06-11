@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Piano Tutor — Aprenda a tocar piano</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>🎹 Piano Tutor</h1>
+    <p class="subtitle">Toque, aprenda e acompanhe melodias nota por nota</p>
+  </header>
+
+  <main>
+    <section class="controls">
+      <div class="control-group">
+        <label for="mode-select">Modo</label>
+        <select id="mode-select">
+          <option value="free">Toque livre</option>
+          <option value="learn">Aprender melodia</option>
+        </select>
+      </div>
+
+      <div class="control-group" id="song-group" hidden>
+        <label for="song-select">Melodia</label>
+        <select id="song-select"></select>
+      </div>
+
+      <div class="control-group" id="learn-buttons" hidden>
+        <button id="btn-listen" class="btn">▶ Ouvir melodia</button>
+        <button id="btn-start" class="btn btn-primary">Começar / Reiniciar</button>
+      </div>
+
+      <div class="control-group">
+        <label for="note-names">Nomes das notas</label>
+        <select id="note-names">
+          <option value="pt">Dó Ré Mi</option>
+          <option value="en">C D E</option>
+          <option value="off">Ocultar</option>
+        </select>
+      </div>
+    </section>
+
+    <section id="practice-panel" hidden>
+      <div class="stats">
+        <div class="stat"><span id="stat-progress">0 / 0</span><label>Progresso</label></div>
+        <div class="stat"><span id="stat-hits">0</span><label>Acertos</label></div>
+        <div class="stat stat-errors"><span id="stat-errors">0</span><label>Erros</label></div>
+        <div class="stat"><span id="stat-accuracy">—</span><label>Precisão</label></div>
+      </div>
+      <div class="progress-bar"><div id="progress-fill"></div></div>
+      <div id="note-strip" class="note-strip"></div>
+      <p id="hint" class="hint">A próxima nota fica destacada em azul no teclado. Toque-a para avançar!</p>
+    </section>
+
+    <div id="feedback" class="feedback" hidden></div>
+
+    <section class="keyboard-wrap">
+      <div id="keyboard" class="keyboard"></div>
+    </section>
+
+    <p class="kbd-help">
+      💡 Você também pode usar o teclado do computador:
+      <strong>Z X C V B N M</strong> (oitava grave, pretas em <strong>S D G H J</strong>) e
+      <strong>Q W E R T Y U I</strong> (oitava aguda, pretas em <strong>2 3 5 6 7</strong>).
+    </p>
+  </main>
+
+  <footer>
+    <p>Melodias de domínio público: Parabéns pra Você, Ode à Alegria (Beethoven), Brilha Brilha Estrelinha e Frère Jacques.</p>
+  </footer>
+
+  <script src="songs.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

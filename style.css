@@ -1,0 +1,221 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #1a1d27;
+  --panel: #242837;
+  --text: #e8eaf2;
+  --muted: #9aa0b5;
+  --accent: #4f8cff;
+  --green: #3ecf7a;
+  --red: #ff5d6c;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+header { text-align: center; padding: 28px 16px 8px; }
+h1 { font-size: 2rem; letter-spacing: 1px; }
+.subtitle { color: var(--muted); margin-top: 6px; }
+
+main { width: 100%; max-width: 1060px; padding: 16px; }
+
+/* ---------- Controls ---------- */
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  align-items: flex-end;
+  justify-content: center;
+  background: var(--panel);
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}
+
+.control-group { display: flex; flex-direction: column; gap: 6px; }
+.control-group label { font-size: 0.78rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+
+select, .btn {
+  background: #313650;
+  color: var(--text);
+  border: 1px solid #424866;
+  border-radius: 8px;
+  padding: 9px 14px;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.btn:hover { background: #3b4160; }
+.btn-primary { background: var(--accent); border-color: var(--accent); font-weight: 600; }
+.btn-primary:hover { background: #6ba0ff; }
+#learn-buttons { flex-direction: row; gap: 10px; }
+
+/* ---------- Practice panel ---------- */
+#practice-panel {
+  background: var(--panel);
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}
+
+.stats { display: flex; gap: 28px; justify-content: center; margin-bottom: 12px; }
+.stat { text-align: center; }
+.stat span { font-size: 1.5rem; font-weight: 700; }
+.stat label { display: block; font-size: 0.75rem; color: var(--muted); text-transform: uppercase; }
+.stat-errors span { color: var(--red); }
+
+.progress-bar {
+  height: 8px;
+  background: #313650;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+#progress-fill {
+  height: 100%;
+  width: 0;
+  background: linear-gradient(90deg, var(--accent), var(--green));
+  transition: width 0.2s;
+}
+
+/* Strip with the song's notes */
+.note-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+.note-chip {
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: #313650;
+  font-size: 0.85rem;
+  color: var(--muted);
+  border: 1px solid transparent;
+}
+.note-chip.done { background: #234534; color: var(--green); }
+.note-chip.wrong-once { border-color: var(--red); }
+.note-chip.current {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+  transform: scale(1.1);
+}
+
+.hint { text-align: center; color: var(--muted); font-size: 0.85rem; }
+
+/* Feedback banner */
+.feedback {
+  text-align: center;
+  font-size: 1.05rem;
+  font-weight: 600;
+  padding: 10px;
+  border-radius: 10px;
+  margin-bottom: 14px;
+}
+.feedback.ok { background: #234534; color: var(--green); }
+.feedback.err { background: #4a2330; color: var(--red); }
+.feedback.end { background: #2c3a5e; color: #fff; }
+
+/* ---------- Keyboard ---------- */
+.keyboard-wrap {
+  background: var(--panel);
+  border-radius: 12px;
+  padding: 20px;
+  overflow-x: auto;
+}
+
+.keyboard {
+  position: relative;
+  display: flex;
+  height: 220px;
+  width: max-content;
+  margin: 0 auto;
+  user-select: none;
+}
+
+.key {
+  position: relative;
+  border-radius: 0 0 8px 8px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  padding-bottom: 8px;
+  transition: background 0.08s;
+}
+
+.key.white {
+  width: 58px;
+  height: 100%;
+  background: linear-gradient(#fff, #f0f0f3);
+  border: 1px solid #b9bcc9;
+  color: #555;
+  z-index: 1;
+}
+
+.key.black {
+  width: 36px;
+  height: 60%;
+  background: linear-gradient(#3a3a42, #17171c);
+  color: #cfcfd8;
+  margin: 0 -18px;
+  z-index: 2;
+  font-size: 0.7rem;
+}
+
+.key .note-label { font-size: 0.78rem; font-weight: 600; pointer-events: none; }
+.key .kbd-label {
+  font-size: 0.65rem;
+  opacity: 0.55;
+  margin-top: 2px;
+  pointer-events: none;
+}
+
+.key.white:active, .key.white.pressed { background: #d8e2ff; }
+.key.black:active, .key.black.pressed { background: #4a5575; }
+
+/* Target note in learn mode */
+.key.target.white { background: linear-gradient(#bcd2ff, #8db3ff); border-color: var(--accent); }
+.key.target.black { background: linear-gradient(#5e85d6, #33508f); }
+.key.target { animation: pulse 1s infinite; }
+
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(79, 140, 255, 0.7); }
+  50% { box-shadow: 0 0 14px 4px rgba(79, 140, 255, 0.55); }
+}
+
+.key.flash-ok.white { background: #9be9bb !important; }
+.key.flash-ok.black { background: #2c7a4d !important; }
+.key.flash-err.white { background: #ffb3bb !important; }
+.key.flash-err.black { background: #8f2c3a !important; }
+
+.kbd-help {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.82rem;
+  margin-top: 12px;
+}
+
+footer {
+  margin-top: auto;
+  padding: 18px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+@media (max-width: 700px) {
+  .key.white { width: 44px; }
+  .key.black { width: 28px; margin: 0 -14px; }
+  .keyboard { height: 180px; }
+}
