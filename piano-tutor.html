@@ -31,7 +31,7 @@ header { text-align: center; padding: 28px 16px 8px; }
 h1 { font-size: 2rem; letter-spacing: 1px; }
 .subtitle { color: var(--muted); margin-top: 6px; }
 
-main { width: 100%; max-width: 1060px; padding: 16px; }
+main { width: 100%; max-width: 1380px; padding: 16px; }
 
 /* ---------- Controls ---------- */
 .controls {
@@ -140,12 +140,14 @@ select, .btn {
   overflow-x: auto;
 }
 
+/* As teclas se esticam para preencher a largura disponível (sem rolagem em
+   telas de computador); em telas muito estreitas vale o min-width + rolagem */
 .keyboard {
   position: relative;
   display: flex;
-  height: 220px;
-  width: max-content;
-  margin: 0 auto;
+  height: 240px;
+  width: 100%;
+  min-width: 700px;
   user-select: none;
 }
 
@@ -162,7 +164,8 @@ select, .btn {
 }
 
 .key.white {
-  width: 58px;
+  flex: 1 1 0;
+  min-width: 0;
   height: 100%;
   background: linear-gradient(#fff, #f0f0f3);
   border: 1px solid #b9bcc9;
@@ -171,11 +174,11 @@ select, .btn {
 }
 
 .key.black {
-  width: 36px;
+  width: 3.4%;
   height: 60%;
   background: linear-gradient(#3a3a42, #17171c);
   color: #cfcfd8;
-  margin: 0 -18px;
+  margin: 0 -1.7%;
   z-index: 2;
   font-size: 0.7rem;
 }
@@ -284,9 +287,8 @@ footer {
 }
 
 @media (max-width: 700px) {
-  .key.white { width: 44px; }
-  .key.black { width: 28px; margin: 0 -14px; }
-  .keyboard { height: 180px; }
+  .keyboard { height: 185px; min-width: 640px; }
+  .key .note-label { font-size: 0.68rem; }
 }
 </style>
 </head>
@@ -556,6 +558,9 @@ function playNote(noteId, duration = null, when = 0) {
     osc.start(t0);
     osc.stop(t0 + decay + 0.1);
   });
+
+  // controle para silenciar a nota antes da hora (usado pelo botão Parar)
+  return { stop() { try { master.disconnect(); } catch { /* já desconectado */ } } };
 }
 
 // ---------- Construção do teclado na tela ----------
@@ -805,6 +810,7 @@ function updateDeleteButton() {
 }
 
 function setMode(mode) {
+  stopDemo();
   state.mode = mode;
   const learn = mode === "learn";
   els.songGroup.hidden = !learn;
@@ -821,6 +827,7 @@ function currentSong() {
 }
 
 function startPractice() {
+  stopDemo();
   state.song = currentSong();
   if (!state.song) return;
   state.index = 0;
@@ -944,31 +951,44 @@ document.addEventListener("keydown", (e) => {
 document.addEventListener("keyup", (e) => heldKeys.delete(e.key.toLowerCase()));
 
 // ---------- Demonstração da melodia ----------
+let demo = null; // { handles: [], timeouts: [] } enquanto a demonstração toca
+
+function stopDemo() {
+  if (!demo) return;
+  demo.handles.forEach((h) => h.stop());
+  demo.timeouts.forEach(clearTimeout);
+  demo = null;
+  state.demoPlaying = false;
+  Object.values(keyEls).forEach((el) => el.classList.remove("pressed"));
+  els.btnListen.textContent = "▶ Ouvir melodia";
+  if (state.active) highlightTarget();
+}
+
 function playDemo() {
-  if (state.demoPlaying) return;
+  if (state.demoPlaying) {
+    stopDemo();
+    return;
+  }
   const song = currentSong();
   if (!song) return;
   state.demoPlaying = true;
-  els.btnListen.disabled = true;
+  els.btnListen.textContent = "⏹ Parar";
   clearTarget();
+  demo = { handles: [], timeouts: [] };
 
   const beat = 60 / song.bpm;
   let when = 0.2;
   song.notes.forEach((note) => {
     const dur = note.d * beat;
-    playNote(note.n, Math.max(dur * 1.1, 0.45), when);
+    demo.handles.push(playNote(note.n, Math.max(dur * 1.1, 0.45), when));
     const delay = when * 1000;
-    setTimeout(() => {
+    demo.timeouts.push(setTimeout(() => {
       flashKey(note.n, "pressed", dur * 900);
-    }, delay);
+    }, delay));
     when += dur;
   });
 
-  setTimeout(() => {
-    state.demoPlaying = false;
-    els.btnListen.disabled = false;
-    if (state.active) highlightTarget();
-  }, when * 1000 + 300);
+  demo.timeouts.push(setTimeout(() => stopDemo(), when * 1000 + 300));
 }
 
 // ---------- Importar / remover melodias ----------

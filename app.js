@@ -107,6 +107,9 @@ function playNote(noteId, duration = null, when = 0) {
     osc.start(t0);
     osc.stop(t0 + decay + 0.1);
   });
+
+  // controle para silenciar a nota antes da hora (usado pelo botão Parar)
+  return { stop() { try { master.disconnect(); } catch { /* já desconectado */ } } };
 }
 
 // ---------- Construção do teclado na tela ----------
@@ -356,6 +359,7 @@ function updateDeleteButton() {
 }
 
 function setMode(mode) {
+  stopDemo();
   state.mode = mode;
   const learn = mode === "learn";
   els.songGroup.hidden = !learn;
@@ -372,6 +376,7 @@ function currentSong() {
 }
 
 function startPractice() {
+  stopDemo();
   state.song = currentSong();
   if (!state.song) return;
   state.index = 0;
@@ -495,31 +500,44 @@ document.addEventListener("keydown", (e) => {
 document.addEventListener("keyup", (e) => heldKeys.delete(e.key.toLowerCase()));
 
 // ---------- Demonstração da melodia ----------
+let demo = null; // { handles: [], timeouts: [] } enquanto a demonstração toca
+
+function stopDemo() {
+  if (!demo) return;
+  demo.handles.forEach((h) => h.stop());
+  demo.timeouts.forEach(clearTimeout);
+  demo = null;
+  state.demoPlaying = false;
+  Object.values(keyEls).forEach((el) => el.classList.remove("pressed"));
+  els.btnListen.textContent = "▶ Ouvir melodia";
+  if (state.active) highlightTarget();
+}
+
 function playDemo() {
-  if (state.demoPlaying) return;
+  if (state.demoPlaying) {
+    stopDemo();
+    return;
+  }
   const song = currentSong();
   if (!song) return;
   state.demoPlaying = true;
-  els.btnListen.disabled = true;
+  els.btnListen.textContent = "⏹ Parar";
   clearTarget();
+  demo = { handles: [], timeouts: [] };
 
   const beat = 60 / song.bpm;
   let when = 0.2;
   song.notes.forEach((note) => {
     const dur = note.d * beat;
-    playNote(note.n, Math.max(dur * 1.1, 0.45), when);
+    demo.handles.push(playNote(note.n, Math.max(dur * 1.1, 0.45), when));
     const delay = when * 1000;
-    setTimeout(() => {
+    demo.timeouts.push(setTimeout(() => {
       flashKey(note.n, "pressed", dur * 900);
-    }, delay);
+    }, delay));
     when += dur;
   });
 
-  setTimeout(() => {
-    state.demoPlaying = false;
-    els.btnListen.disabled = false;
-    if (state.active) highlightTarget();
-  }, when * 1000 + 300);
+  demo.timeouts.push(setTimeout(() => stopDemo(), when * 1000 + 300));
 }
 
 // ---------- Importar / remover melodias ----------
