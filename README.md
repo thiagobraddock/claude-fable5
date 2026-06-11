@@ -39,19 +39,33 @@ python3 -m http.server 8000
 - Brilha Brilha Estrelinha
 - Frère Jacques
 
-## Adicionando novas melodias
+## Adicionando novas melodias (sem programar!)
 
-Edite `songs.js` e acrescente uma entrada no objeto `SONGS`:
+No modo "Aprender melodia", clique em **➕ Nova melodia**. O fluxo é pensado
+para quem não programa:
 
-```js
-minhaMusica: {
-  title: "Minha Música",
-  bpm: 100,
-  notes: [
-    { n: "C4", d: 1 },   // n = nota (notação científica), d = duração em tempos
-    { n: "D4", d: 0.5 },
-  ],
-},
+1. O botão **Copiar instruções para o Claude** copia um prompt pronto.
+2. Cole o prompt no [claude.ai](https://claude.ai) junto com uma **foto da
+   partitura, um PDF ou só o nome da música** — o Claude faz o parse e devolve
+   o código da melodia.
+3. Cole o código no campo de importação e pronto: a melodia entra na lista
+   "Minhas melodias", fica salva no navegador (localStorage) e já abre em modo
+   de prática.
+
+O importador aceita:
+
+```json
+{"title":"Minha Música","bpm":100,"notes":[{"n":"C4","d":1},{"n":"D4","d":0.5}]}
 ```
 
-As notas devem estar dentro do intervalo do teclado (G3 a C6).
+ou um formato simples digitado à mão (nomes em português valem!):
+
+```
+titulo: Minha Música
+bpm: 100
+Dó4 Ré4:0.5 Mi4 Fá4:2
+```
+
+Se a melodia não couber no teclado (G3 a C6), o importador tenta transpor por
+oitavas automaticamente. Melodias fixas do app continuam em `songs.js`, no
+mesmo formato.

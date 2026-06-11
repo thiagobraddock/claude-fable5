@@ -30,6 +30,8 @@
       <div class="control-group" id="learn-buttons" hidden>
         <button id="btn-listen" class="btn">▶ Ouvir melodia</button>
         <button id="btn-start" class="btn btn-primary">Começar / Reiniciar</button>
+        <button id="btn-add" class="btn">➕ Nova melodia</button>
+        <button id="btn-del" class="btn btn-danger" hidden>🗑 Remover</button>
       </div>
 
       <div class="control-group">
@@ -70,6 +72,30 @@
   <footer>
     <p>Melodias de domínio público: Parabéns pra Você, Ode à Alegria (Beethoven), Brilha Brilha Estrelinha e Frère Jacques.</p>
   </footer>
+
+  <dialog id="import-dialog">
+    <h2>➕ Adicionar nova melodia</h2>
+    <p class="dialog-text">
+      Tem uma partitura em foto ou PDF, ou só o nome de uma música?
+      Peça ao <strong>Claude</strong> (claude.ai) para converter pro formato do Piano Tutor:
+    </p>
+    <ol class="dialog-steps">
+      <li>Clique no botão abaixo e cole as instruções no chat do Claude, junto com a foto/PDF ou o nome da música.</li>
+      <li>Copie o código que ele responder.</li>
+      <li>Cole no campo abaixo e clique em <em>Importar</em>. Voilà!</li>
+    </ol>
+    <button id="btn-copy-prompt" class="btn">📋 Copiar instruções para o Claude</button>
+    <details class="prompt-details">
+      <summary>Ver as instruções / formatos aceitos</summary>
+      <pre id="prompt-text"></pre>
+    </details>
+    <textarea id="import-text" rows="6" placeholder='Cole aqui o código da melodia… Ex.: {"title":"Minha Música","bpm":100,"notes":[{"n":"C4","d":1},{"n":"D4","d":1}]}'></textarea>
+    <p id="import-error" class="import-error" hidden></p>
+    <div class="dialog-actions">
+      <button id="btn-import-cancel" class="btn">Cancelar</button>
+      <button id="btn-import-ok" class="btn btn-primary">Importar</button>
+    </div>
+  </dialog>
 
   <script src="songs.js"></script>
   <script src="app.js"></script>

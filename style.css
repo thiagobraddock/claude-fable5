@@ -214,6 +214,68 @@ footer {
   text-align: center;
 }
 
+/* ---------- Diálogo de importação ---------- */
+.btn-danger { background: #5e2733; border-color: #7a3342; }
+.btn-danger:hover { background: #74303f; }
+
+#import-dialog {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid #424866;
+  border-radius: 14px;
+  padding: 24px;
+  max-width: 620px;
+  width: calc(100vw - 40px);
+}
+#import-dialog::backdrop { background: rgba(0, 0, 0, 0.65); }
+#import-dialog h2 { margin-bottom: 10px; font-size: 1.3rem; }
+.dialog-text { color: var(--muted); margin-bottom: 10px; line-height: 1.45; }
+.dialog-steps { margin: 0 0 14px 22px; color: var(--muted); line-height: 1.6; font-size: 0.92rem; }
+.dialog-steps em, .dialog-text strong { color: var(--text); font-style: normal; }
+
+.prompt-details { margin: 12px 0; }
+.prompt-details summary { cursor: pointer; color: var(--accent); font-size: 0.88rem; }
+.prompt-details pre {
+  background: #181b26;
+  border: 1px solid #313650;
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 8px;
+  font-size: 0.78rem;
+  white-space: pre-wrap;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+#import-text {
+  width: 100%;
+  background: #181b26;
+  color: var(--text);
+  border: 1px solid #424866;
+  border-radius: 8px;
+  padding: 10px;
+  font-family: monospace;
+  font-size: 0.85rem;
+  resize: vertical;
+  margin-top: 6px;
+}
+
+.import-error {
+  background: #4a2330;
+  color: var(--red);
+  border-radius: 8px;
+  padding: 10px;
+  margin-top: 10px;
+  font-size: 0.9rem;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+}
+
 @media (max-width: 700px) {
   .key.white { width: 44px; }
   .key.black { width: 28px; margin: 0 -14px; }

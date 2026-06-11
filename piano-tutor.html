@@ -221,6 +221,68 @@ footer {
   text-align: center;
 }
 
+/* ---------- Diálogo de importação ---------- */
+.btn-danger { background: #5e2733; border-color: #7a3342; }
+.btn-danger:hover { background: #74303f; }
+
+#import-dialog {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid #424866;
+  border-radius: 14px;
+  padding: 24px;
+  max-width: 620px;
+  width: calc(100vw - 40px);
+}
+#import-dialog::backdrop { background: rgba(0, 0, 0, 0.65); }
+#import-dialog h2 { margin-bottom: 10px; font-size: 1.3rem; }
+.dialog-text { color: var(--muted); margin-bottom: 10px; line-height: 1.45; }
+.dialog-steps { margin: 0 0 14px 22px; color: var(--muted); line-height: 1.6; font-size: 0.92rem; }
+.dialog-steps em, .dialog-text strong { color: var(--text); font-style: normal; }
+
+.prompt-details { margin: 12px 0; }
+.prompt-details summary { cursor: pointer; color: var(--accent); font-size: 0.88rem; }
+.prompt-details pre {
+  background: #181b26;
+  border: 1px solid #313650;
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 8px;
+  font-size: 0.78rem;
+  white-space: pre-wrap;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+#import-text {
+  width: 100%;
+  background: #181b26;
+  color: var(--text);
+  border: 1px solid #424866;
+  border-radius: 8px;
+  padding: 10px;
+  font-family: monospace;
+  font-size: 0.85rem;
+  resize: vertical;
+  margin-top: 6px;
+}
+
+.import-error {
+  background: #4a2330;
+  color: var(--red);
+  border-radius: 8px;
+  padding: 10px;
+  margin-top: 10px;
+  font-size: 0.9rem;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+}
+
 @media (max-width: 700px) {
   .key.white { width: 44px; }
   .key.black { width: 28px; margin: 0 -14px; }
@@ -252,6 +314,8 @@ footer {
       <div class="control-group" id="learn-buttons" hidden>
         <button id="btn-listen" class="btn">▶ Ouvir melodia</button>
         <button id="btn-start" class="btn btn-primary">Começar / Reiniciar</button>
+        <button id="btn-add" class="btn">➕ Nova melodia</button>
+        <button id="btn-del" class="btn btn-danger" hidden>🗑 Remover</button>
       </div>
 
       <div class="control-group">
@@ -292,6 +356,30 @@ footer {
   <footer>
     <p>Melodias de domínio público: Parabéns pra Você, Ode à Alegria (Beethoven), Brilha Brilha Estrelinha e Frère Jacques.</p>
   </footer>
+
+  <dialog id="import-dialog">
+    <h2>➕ Adicionar nova melodia</h2>
+    <p class="dialog-text">
+      Tem uma partitura em foto ou PDF, ou só o nome de uma música?
+      Peça ao <strong>Claude</strong> (claude.ai) para converter pro formato do Piano Tutor:
+    </p>
+    <ol class="dialog-steps">
+      <li>Clique no botão abaixo e cole as instruções no chat do Claude, junto com a foto/PDF ou o nome da música.</li>
+      <li>Copie o código que ele responder.</li>
+      <li>Cole no campo abaixo e clique em <em>Importar</em>. Voilà!</li>
+    </ol>
+    <button id="btn-copy-prompt" class="btn">📋 Copiar instruções para o Claude</button>
+    <details class="prompt-details">
+      <summary>Ver as instruções / formatos aceitos</summary>
+      <pre id="prompt-text"></pre>
+    </details>
+    <textarea id="import-text" rows="6" placeholder='Cole aqui o código da melodia… Ex.: {"title":"Minha Música","bpm":100,"notes":[{"n":"C4","d":1},{"n":"D4","d":1}]}'></textarea>
+    <p id="import-error" class="import-error" hidden></p>
+    <div class="dialog-actions">
+      <button id="btn-import-cancel" class="btn">Cancelar</button>
+      <button id="btn-import-ok" class="btn btn-primary">Importar</button>
+    </div>
+  </dialog>
 
   <script>
 // Melodias de domínio público.
@@ -384,6 +472,10 @@ function noteToMidi(note) {
   return (octave + 1) * 12 + NOTE_ORDER.indexOf(name);
 }
 
+function midiToNote(midi) {
+  return NOTE_ORDER[((midi % 12) + 12) % 12] + (Math.floor(midi / 12) - 1);
+}
+
 function midiToFreq(midi) {
   return 440 * Math.pow(2, (midi - 69) / 12);
 }
@@ -403,41 +495,66 @@ function buildNoteList() {
 
 // ---------- Áudio (Web Audio API) ----------
 let audioCtx = null;
+let compressor = null;
 
 function getAudioCtx() {
-  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    // evita estouro/distorção quando várias notas soam juntas
+    compressor = audioCtx.createDynamicsCompressor();
+    compressor.threshold.value = -18;
+    compressor.knee.value = 20;
+    compressor.ratio.value = 6;
+    compressor.connect(audioCtx.destination);
+  }
   if (audioCtx.state === "suspended") audioCtx.resume();
   return audioCtx;
 }
 
-// Som de piano simplificado: fundamental + harmônicos com decaimento exponencial
-function playNote(noteId, duration = 1.4, when = 0) {
+// Som de piano sintetizado: cordas levemente desafinadas entre si, harmônicos
+// que decaem mais rápido que a fundamental e filtro que escurece o som ao
+// longo da nota (ataque brilhante do martelo → ressonância suave da corda)
+function playNote(noteId, duration = null, when = 0) {
   const ctx = getAudioCtx();
   const t0 = ctx.currentTime + when;
-  const freq = midiToFreq(noteToMidi(noteId));
+  const midi = noteToMidi(noteId);
+  const freq = midiToFreq(midi);
+  // notas graves ressoam por mais tempo, como num piano real
+  const decay = duration || Math.max(1.2, 2.8 - (midi - 55) * 0.05);
 
   const master = ctx.createGain();
   master.gain.setValueAtTime(0, t0);
-  master.gain.linearRampToValueAtTime(0.5, t0 + 0.01);
-  master.gain.exponentialRampToValueAtTime(0.001, t0 + duration);
-  master.connect(ctx.destination);
+  master.gain.linearRampToValueAtTime(0.35, t0 + 0.008);
+  master.gain.exponentialRampToValueAtTime(0.0008, t0 + decay);
 
-  const harmonics = [
-    { mult: 1, gain: 1.0, type: "triangle" },
-    { mult: 2, gain: 0.35, type: "sine" },
-    { mult: 3, gain: 0.12, type: "sine" },
-    { mult: 4, gain: 0.06, type: "sine" },
+  const filter = ctx.createBiquadFilter();
+  filter.type = "lowpass";
+  filter.Q.value = 0.4;
+  filter.frequency.setValueAtTime(Math.min(freq * 9, 9000), t0);
+  filter.frequency.exponentialRampToValueAtTime(Math.max(freq * 1.8, 600), t0 + decay * 0.6);
+
+  master.connect(filter).connect(compressor);
+
+  const partials = [
+    { mult: 1, gain: 1.0, detune: 0, type: "triangle" },
+    { mult: 1, gain: 0.45, detune: 4, type: "triangle" },
+    { mult: 2, gain: 0.3, detune: 0, type: "sine" },
+    { mult: 3, gain: 0.12, detune: 0, type: "sine" },
+    { mult: 4, gain: 0.06, detune: 0, type: "sine" },
+    { mult: 5, gain: 0.03, detune: 0, type: "sine" },
   ];
 
-  harmonics.forEach(({ mult, gain, type }) => {
+  partials.forEach(({ mult, gain, detune, type }) => {
     const osc = ctx.createOscillator();
     const g = ctx.createGain();
     osc.type = type;
     osc.frequency.setValueAtTime(freq * mult, t0);
+    osc.detune.setValueAtTime(detune, t0);
     g.gain.setValueAtTime(gain, t0);
+    g.gain.exponentialRampToValueAtTime(gain * 0.01 + 0.0001, t0 + decay / (1 + (mult - 1) * 0.6));
     osc.connect(g).connect(master);
     osc.start(t0);
-    osc.stop(t0 + duration + 0.05);
+    osc.stop(t0 + decay + 0.1);
   });
 }
 
@@ -500,6 +617,124 @@ function flashKey(noteId, cls, ms = 250) {
   setTimeout(() => el.classList.remove(cls), ms);
 }
 
+// ---------- Melodias do usuário (localStorage) ----------
+const LS_KEY = "pianoTutor.customSongs";
+
+function loadCustomSongs() {
+  try {
+    return JSON.parse(localStorage.getItem(LS_KEY)) || {};
+  } catch {
+    return {};
+  }
+}
+
+function saveCustomSongs(customs) {
+  localStorage.setItem(LS_KEY, JSON.stringify(customs));
+}
+
+function getSong(key) {
+  if (key.startsWith("custom:")) return loadCustomSongs()[key.slice(7)];
+  return SONGS[key];
+}
+
+// ---------- Importação de melodias ----------
+const CLAUDE_PROMPT = `Converta a melodia que vou te passar (foto de partitura, PDF ou apenas o nome da música) para o formato JSON do app Piano Tutor:
+
+{"title":"Nome da Música","bpm":100,"notes":[{"n":"G4","d":0.75},{"n":"G4","d":0.25},{"n":"A4","d":1},{"n":"G4","d":1}]}
+
+Regras:
+- "n" é a nota em notação científica americana (C, C#, D, D#, E, F, F#, G, G#, A, A#, B + número da oitava). O Dó central é C4.
+- "d" é a duração em tempos: 1 = semínima, 0.5 = colcheia, 2 = mínima, 4 = semibreve.
+- Use apenas a melodia principal, uma nota por vez (sem acordes).
+- Todas as notas devem ficar entre G3 e C6; transponha a música se for preciso.
+- "bpm" é o andamento em batidas por minuto.
+- Responda SOMENTE com o JSON, sem nenhum texto antes ou depois.`;
+
+const PT_TO_LETTER = { do: "C", re: "D", mi: "E", fa: "F", sol: "G", la: "A", si: "B" };
+
+// Aceita "C4", "c#4", "Dó4", "sol3", "Bb4"… e devolve o id canônico ("C4")
+function normalizeNoteName(raw) {
+  const s = String(raw).trim().normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  const m = s.match(/^(do|re|mi|fa|sol|la|si|[a-g])(#|b)?(\d)$/);
+  if (!m) return null;
+  const letter = PT_TO_LETTER[m[1]] || m[1].toUpperCase();
+  const accidental = m[2] === "#" ? 1 : m[2] === "b" ? -1 : 0;
+  const midi = (parseInt(m[3], 10) + 1) * 12 + NOTE_ORDER.indexOf(letter) + accidental;
+  return midiToNote(midi);
+}
+
+// Formato simples alternativo: linhas "titulo:"/"bpm:" e notas "C4 D4:0.5 Mi4"
+function parseCompact(text) {
+  const song = { title: "", bpm: 100, notes: [] };
+  text.split(/\n+/).forEach((line) => {
+    const l = line.trim();
+    if (!l) return;
+    const title = l.match(/^(t[ií]tulo|title|nome)\s*[:=]\s*(.+)$/i);
+    if (title) { song.title = title[2].trim(); return; }
+    const bpm = l.match(/^bpm\s*[:=]\s*(\d+)/i);
+    if (bpm) { song.bpm = +bpm[1]; return; }
+    l.split(/[\s,;]+/).forEach((tok) => {
+      if (!tok) return;
+      const [n, d] = tok.split(":");
+      song.notes.push({ n, d: d ? parseFloat(d.replace(",", ".")) : 1 });
+    });
+  });
+  return song;
+}
+
+function parseImport(text) {
+  // remove cercas de markdown que o Claude às vezes inclui
+  const t = text.trim().replace(/^```[a-z]*\s*/i, "").replace(/```\s*$/, "").trim();
+  if (!t) throw new Error("O campo está vazio. Cole o código da melodia.");
+
+  let song;
+  if (t.startsWith("{")) {
+    let obj;
+    try {
+      obj = JSON.parse(t);
+    } catch {
+      throw new Error("O código está incompleto ou com erro. Copie a resposta inteira do Claude e cole de novo.");
+    }
+    song = { title: obj.title, bpm: obj.bpm, notes: obj.notes };
+  } else {
+    song = parseCompact(t);
+  }
+
+  if (!Array.isArray(song.notes) || !song.notes.length) {
+    throw new Error("Não encontrei nenhuma nota na melodia.");
+  }
+
+  const notes = song.notes.map((nt, i) => {
+    const rawName = typeof nt === "string" ? nt : nt && nt.n;
+    const id = normalizeNoteName(rawName);
+    if (!id) throw new Error(`Nota nº ${i + 1} inválida: "${rawName}". Use o formato C4, G#4, Dó4…`);
+    const d = Number(typeof nt === "string" ? 1 : nt.d) || 1;
+    return { n: id, d: Math.min(8, Math.max(0.125, d)) };
+  });
+
+  // encaixa no alcance do teclado (G3–C6), transpondo oitavas inteiras se necessário
+  const lo = noteToMidi("G3");
+  const hi = noteToMidi("C6");
+  const midis = notes.map((nt) => noteToMidi(nt.n));
+  const min = Math.min(...midis);
+  const max = Math.max(...midis);
+  let shift = null;
+  for (const s of [0, 12, -12, 24, -24]) {
+    if (min + s >= lo && max + s <= hi) { shift = s; break; }
+  }
+  if (shift === null) {
+    throw new Error("A melodia usa notas além do alcance do teclado (Sol3 a Dó6), mesmo transpondo. Peça ao Claude uma versão simplificada em uma região média.");
+  }
+  if (shift !== 0) notes.forEach((nt, i) => { nt.n = midiToNote(midis[i] + shift); });
+
+  return {
+    title: String(song.title || "Minha melodia").slice(0, 60),
+    bpm: Math.min(240, Math.max(30, Number(song.bpm) || 100)),
+    notes,
+    shifted: shift !== 0,
+  };
+}
+
 // ---------- Estado de aprendizado ----------
 const state = {
   mode: "free",
@@ -526,15 +761,47 @@ const els = {
   feedback: document.getElementById("feedback"),
   btnListen: document.getElementById("btn-listen"),
   btnStart: document.getElementById("btn-start"),
+  btnAdd: document.getElementById("btn-add"),
+  btnDel: document.getElementById("btn-del"),
+  importDialog: document.getElementById("import-dialog"),
+  importText: document.getElementById("import-text"),
+  importError: document.getElementById("import-error"),
+  btnCopyPrompt: document.getElementById("btn-copy-prompt"),
 };
 
-function populateSongs() {
+function populateSongs(selectKey) {
+  els.songSelect.innerHTML = "";
+
+  const builtin = document.createElement("optgroup");
+  builtin.label = "Incluídas";
   Object.entries(SONGS).forEach(([key, song]) => {
     const opt = document.createElement("option");
     opt.value = key;
     opt.textContent = song.title;
-    els.songSelect.appendChild(opt);
+    builtin.appendChild(opt);
   });
+  els.songSelect.appendChild(builtin);
+
+  const customs = loadCustomSongs();
+  const ids = Object.keys(customs);
+  if (ids.length) {
+    const og = document.createElement("optgroup");
+    og.label = "Minhas melodias";
+    ids.forEach((id) => {
+      const opt = document.createElement("option");
+      opt.value = "custom:" + id;
+      opt.textContent = customs[id].title;
+      og.appendChild(opt);
+    });
+    els.songSelect.appendChild(og);
+  }
+
+  if (selectKey && getSong(selectKey)) els.songSelect.value = selectKey;
+  updateDeleteButton();
+}
+
+function updateDeleteButton() {
+  els.btnDel.hidden = !els.songSelect.value.startsWith("custom:");
 }
 
 function setMode(mode) {
@@ -550,11 +817,12 @@ function setMode(mode) {
 }
 
 function currentSong() {
-  return SONGS[els.songSelect.value];
+  return getSong(els.songSelect.value);
 }
 
 function startPractice() {
   state.song = currentSong();
+  if (!state.song) return;
   state.index = 0;
   state.hits = 0;
   state.errors = 0;
@@ -665,6 +933,8 @@ function handleInput(noteId) {
 const heldKeys = new Set();
 document.addEventListener("keydown", (e) => {
   if (e.repeat) return;
+  // não toca notas enquanto o usuário digita em campos ou no diálogo
+  if (e.target.matches("input, textarea, select") || els.importDialog.open) return;
   const key = e.key.toLowerCase();
   if (KEY_MAP[key] && !heldKeys.has(key)) {
     heldKeys.add(key);
@@ -677,6 +947,7 @@ document.addEventListener("keyup", (e) => heldKeys.delete(e.key.toLowerCase()));
 function playDemo() {
   if (state.demoPlaying) return;
   const song = currentSong();
+  if (!song) return;
   state.demoPlaying = true;
   els.btnListen.disabled = true;
   clearTarget();
@@ -685,7 +956,7 @@ function playDemo() {
   let when = 0.2;
   song.notes.forEach((note) => {
     const dur = note.d * beat;
-    playNote(note.n, Math.max(dur * 0.95, 0.3), when);
+    playNote(note.n, Math.max(dur * 1.1, 0.45), when);
     const delay = when * 1000;
     setTimeout(() => {
       flashKey(note.n, "pressed", dur * 900);
@@ -700,17 +971,75 @@ function playDemo() {
   }, when * 1000 + 300);
 }
 
+// ---------- Importar / remover melodias ----------
+function importSong() {
+  els.importError.hidden = true;
+  try {
+    const parsed = parseImport(els.importText.value);
+    const customs = loadCustomSongs();
+    const id = "s" + Date.now();
+    customs[id] = { title: parsed.title, bpm: parsed.bpm, notes: parsed.notes };
+    saveCustomSongs(customs);
+    populateSongs("custom:" + id);
+    els.modeSelect.value = "learn";
+    setMode("learn");
+    els.importDialog.close();
+    els.importText.value = "";
+    if (parsed.shifted) {
+      showFeedback(`ℹ️ "${parsed.title}" foi importada (transposta de oitava para caber no teclado). Boa prática!`, "end");
+    } else {
+      showFeedback(`✅ "${parsed.title}" foi importada! A primeira nota já está destacada no teclado.`, "end");
+    }
+  } catch (err) {
+    els.importError.textContent = "⚠️ " + err.message;
+    els.importError.hidden = false;
+  }
+}
+
+function deleteCurrentSong() {
+  const key = els.songSelect.value;
+  if (!key.startsWith("custom:")) return;
+  const customs = loadCustomSongs();
+  const id = key.slice(7);
+  const title = customs[id] ? customs[id].title : "";
+  if (!confirm(`Remover a melodia "${title}"?`)) return;
+  delete customs[id];
+  saveCustomSongs(customs);
+  populateSongs();
+  setMode("learn");
+}
+
 // ---------- Eventos ----------
 els.modeSelect.addEventListener("change", () => setMode(els.modeSelect.value));
-els.songSelect.addEventListener("change", () => startPractice());
+els.songSelect.addEventListener("change", () => { updateDeleteButton(); startPractice(); });
 els.btnStart.addEventListener("click", () => startPractice());
 els.btnListen.addEventListener("click", () => playDemo());
+els.btnAdd.addEventListener("click", () => {
+  els.importError.hidden = true;
+  els.importDialog.showModal();
+});
+els.btnDel.addEventListener("click", () => deleteCurrentSong());
+document.getElementById("btn-import-ok").addEventListener("click", () => importSong());
+document.getElementById("btn-import-cancel").addEventListener("click", () => els.importDialog.close());
+els.btnCopyPrompt.addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(CLAUDE_PROMPT);
+    els.btnCopyPrompt.textContent = "✅ Copiado! Agora cole no claude.ai junto com a música";
+  } catch {
+    document.querySelector(".prompt-details").open = true;
+    els.btnCopyPrompt.textContent = "Copie manualmente o texto abaixo ⬇";
+  }
+  setTimeout(() => { els.btnCopyPrompt.textContent = "📋 Copiar instruções para o Claude"; }, 4000);
+});
 document.getElementById("note-names").addEventListener("change", () => {
   updateNoteLabels();
   if (state.mode === "learn" && state.song) buildNoteStrip();
 });
 
 // ---------- Inicialização ----------
+document.getElementById("prompt-text").textContent =
+  CLAUDE_PROMPT +
+  "\n\n— Formato simples também aceito (digitado à mão):\ntitulo: Minha Música\nbpm: 100\nC4 D4:0.5 Mi4 Fá4:2\n(nota:duração — sem duração vale 1 tempo)";
 buildKeyboard();
 populateSongs();
 setMode("free");
